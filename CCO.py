@@ -85,6 +85,7 @@ def run_optimizer(
     bruteforce,
     input_file_name="input_fleet.json",
     output_file_name="fleet_results.json",
+    config_file_path="config_file.json",
     **kw
 ):
     """Run Optimizer- Fleet calculator."""
@@ -93,7 +94,7 @@ def run_optimizer(
     partitions = []
     app_size = dict()
     filter = json.load(file)
-    file1 = open("config_file.json")
+    file1 = open(config_file_path)
     config_file = json.load(file1)
     provider = config_file["Provider (AWS / Azure / Hybrid)"]
     for i, a in enumerate(filter["apps"]):
