@@ -368,6 +368,14 @@ class Node:
                             self.__append_new_node(self.sons, combination, i, module1, j, module2, k)
 
 
+def has_enough_availability(offer, threshold=1):
+    for instance in offer.instance_groups:
+        for comp in instance.components:
+            if comp.interruption_frequency < threshold:
+                return False
+    return True
+
+
 class OptimumSet:
     def __init__(self, k: int):
         """the table holds the best k seen so far in terms of price.
@@ -379,7 +387,7 @@ class OptimumSet:
     def update(self, visited_nodes: list):
         """considers the list of new nodes, such that the resulting set of nodes will be the 'k' best nodes
             seen at any update. The ordering the nodes is given by their 'getPrice()' method."""
-        candidates = self.table + [node.hashCode() for node in visited_nodes if (not (node.hashCode() in self.table))]
+        candidates = self.table + [node.hashCode() for node in visited_nodes if ((not (node.hashCode() in self.table))and has_enough_availability(node.getOffer()))]
         candidates.sort(key=lambda hashcode: Node.node_cache[hashcode].getPrice())
         self.table = candidates[:self.k]
 
