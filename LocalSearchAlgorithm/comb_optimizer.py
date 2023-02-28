@@ -40,7 +40,9 @@ class CombOptim:
                  develop_mode=DevelopMode.ALL,
                  proportion_amount_node_sons_to_develop: float = 0.05,
                  get_next_mode=GetNextMode.STOCHASTIC_ANNEALING,
-                 get_starting_node_mode=GetStartNodeMode.RESET_SELECTOR
+                 get_starting_node_mode=GetStartNodeMode.RESET_SELECTOR,
+                 time_until_early_stop=5,
+                 is_multi_optimization_search_price_and_interruption_rate=False
                  ):
         self.verbose = verbose
         Node.verbose = verbose
@@ -48,7 +50,7 @@ class CombOptim:
 
         """'price_calc' is a function: (Offer)-->float which calculate the price of a certain configuration"""
         self.root = self.calc_root(initial_seperated, price_calc)
-        self.optim_set = OptimumSet(1)
+        self.optim_set = OptimumSet(1, is_multi_optimization_search_price_and_interruption_rate)
         if get_starting_node_mode == GetStartNodeMode.RESET_SELECTOR:
             self.reset_sel = ResetSelector(candidate_list_size, self.get_num_components(), self.root,
                                            exploitation_score_price_bias, exploration_score_depth_bias,
@@ -69,6 +71,8 @@ class CombOptim:
         self.exploitation_bias = exploitation_bias
         self.conn = sqlite3.connect(sql_path)
         self.get_next_mode = get_next_mode
+        self.time_until_early_stop = time_until_early_stop
+
 
     def finish_stats_operation(self):
         self.conn.commit()
@@ -201,6 +205,9 @@ class CombOptim:
         self.create_stats_table()  # in order to save stat info
         i = 1
         res = []
+        best_result = np.inf
+        time_best_result = time.time()
+        time_start = time.time()
         while not self.isDone():
             start_node = self.get_start_node()  # get start node
             path = self.search_algo.run(start_node, self.start_time, self.time_per_region)  # run search from start node
@@ -208,7 +215,14 @@ class CombOptim:
                 break
             if len(path) != 0:
                 self.optim_set.update(path)  # update the final solution
+            best_set = self.optim_set.returnBest()
+            if len(best_set) > 0:
+                if best_set[0].getPrice() > best_result:
+                    best_result = best_set[0].getPrice()
+                    time_best_result = time.time()
 
+            #if time.time() - time_best_result > self.time_until_early_stop:
+             #   break
             # self.insert_stats(i)  # save stat info
             i += 1
 
@@ -259,6 +273,13 @@ class Node:
             hash: {self.hashCode()}\
             , depth: {self.getDepth()}\
             , total_score: {self.price}")
+
+    def get_interruption_rate(self):
+        max_ir = 0
+        for group_comp in self.offer.instance_groups:
+            max_ir = max(max_ir, group_comp.instance["interruption_frequency_filter"])
+
+        return round(max_ir)
 
     def __calc_offer(self):
         modules = []
@@ -368,7 +389,7 @@ class Node:
                             self.__append_new_node(self.sons, combination, i, module1, j, module2, k)
 
 
-def has_enough_availability(offer, threshold=1):
+def has_enough_availability(offer, threshold=4):
     for instance in offer.instance_groups:
         for comp in instance.components:
             if comp.interruption_frequency < threshold:
@@ -377,24 +398,36 @@ def has_enough_availability(offer, threshold=1):
 
 
 class OptimumSet:
-    def __init__(self, k: int):
+    def __init__(self, k: int, is_multi_optimization_search_price_and_interruption_rate):
         """the table holds the best k seen so far in terms of price.
             requires that the elements inserted will have the method 'getPrice' which should
             return a float."""
+        self.is_mo_price_interruption_rate = is_multi_optimization_search_price_and_interruption_rate
         self.k = k
-        self.table: list = []  # contain hashcode
+        if self.is_mo_price_interruption_rate:
+            self.table: list = [np.inf, np.inf, np.inf, np.inf, np.inf]
+        else:
+            self.table: list = []  # contain hashcode
 
     def update(self, visited_nodes: list):
         """considers the list of new nodes, such that the resulting set of nodes will be the 'k' best nodes
             seen at any update. The ordering the nodes is given by their 'getPrice()' method."""
-        candidates = self.table + [node.hashCode() for node in visited_nodes if ((not (node.hashCode() in self.table))and has_enough_availability(node.getOffer()))]
-        candidates.sort(key=lambda hashcode: Node.node_cache[hashcode].getPrice())
-        self.table = candidates[:self.k]
+        if self.is_mo_price_interruption_rate:
+            for node in visited_nodes:
+                ir = node.get_interruption_rate()
+                if self.table[ir] == np.inf:
+                    self.table[ir] = node.hashCode()
+                elif node.getPrice() < Node.node_cache[self.table[ir]].getPrice():
+                    self.table[ir] = node.hashCode()
+        else:
+            candidates = self.table + [node.hashCode() for node in visited_nodes if (not (node.hashCode() in self.table))]
+            candidates.sort(key=lambda hashcode: Node.node_cache[hashcode].getPrice())
+            self.table = candidates[:self.k]
 
     def returnBest(self):
         """returns the 'k' nodes with the best price seen so far.
         If not seen 'k' nodes yet, returns a list shorter than 'k'."""
-        return [Node.node_cache[hashcode] for hashcode in self.table]
+        return [Node.node_cache[hashcode] for hashcode in self.table if hashcode != np.inf]
 
 
 class ResetSelector:

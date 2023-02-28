@@ -57,6 +57,7 @@ class Ec2Parser:
 
     def parse_ec2_response(self, response):
         """Parse_ec2_response function."""
+
         res = list(
             filter(
                 lambda p: p is not None,

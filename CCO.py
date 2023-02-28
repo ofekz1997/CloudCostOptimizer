@@ -161,6 +161,7 @@ if __name__ == "__main__":
     INPUT_FILE = "input_fleet.json"
     OUTPUT_FILE = "fleet_results.json"
     brute_force = True if config_file["Brute Force"] == "True" else False
+    time_until_early_stop = config_file["time_until_early_stop"]
     ALG_PARAMETERS = {
         "candidate_list_size": candidate_list_size,
         "time_per_region": time_per_region,
@@ -173,6 +174,7 @@ if __name__ == "__main__":
         "proportion_amount_node_sons_to_develop": proportion_amount_node_sons_to_develop,
         "get_next_mode": GetNextMode.STOCHASTIC_ANNEALING,
         "get_starting_node_mode": GetStartNodeMode.RANDOM,
+        "time_until_early_stop": time_until_early_stop
     }
 
     run_optimizer(brute_force, INPUT_FILE, OUTPUT_FILE, **ALG_PARAMETERS)

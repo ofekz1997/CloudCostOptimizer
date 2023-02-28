@@ -177,6 +177,9 @@ class SpotCalculator:
                         ec2_data = json.load(file)
             elif config_file["Data Extraction (always / onceAday)"] == "always":
                 ec2_data = self.get_ec2_from_cache(region, user_os)
+            elif config_file["Data Extraction (always / onceAday)"] == "never":
+                file = open("AWSData/ec2_data_Linux.json")
+                ec2_data = json.load(file)
             else:
                 print(
                     "Data Extraction parameter in configuration file is not defined well"
